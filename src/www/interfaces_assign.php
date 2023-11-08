@@ -158,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // no validation errors, delete entry
             unset($config['interfaces'][$id]['enable']);
-            interface_bring_down($id);
+            interface_bring_down($id, true);
 
             if (isset($config['dhcpd'][$id])) {
                 unset($config['dhcpd'][$id]);
@@ -244,7 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               if (!is_array($ifdev) && ($ifname == 'lan' || $ifname == 'wan' || substr($ifname, 0, 3) == 'opt')) {
                   $reloadif = false;
                   if (!empty($config['interfaces'][$ifname]['if']) && $config['interfaces'][$ifname]['if'] != $ifdev) {
-                      interface_bring_down($ifname);
+                      interface_bring_down($ifname, true);
                       /* Mark this to be reconfigured in any case. */
                       $reloadif = true;
                   }

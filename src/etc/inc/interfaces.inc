@@ -766,39 +766,30 @@ function interface_vip_bring_down($vip)
     }
 }
 
-function interface_bring_down($interface = 'wan', $ifacecfg = false)
+function interface_bring_down($interface, $ifacecfg = false)
 {
     global $config;
 
-    if (!isset($config['interfaces'][$interface]) || ($ifacecfg !== false && !is_array($ifacecfg))) {
+    if (!isset($config['interfaces'][$interface]) || !is_bool($ifacecfg) || !is_array($ifacecfg)) {
         return;
     }
 
-    if ($ifacecfg === false) {
-        $realif = get_real_interface($interface);
-        $realifv6 = get_real_interface($interface, "inet6");
-        $ifcfg = $config['interfaces'][$interface];
-        $ppps = isset($config['ppps']['ppp']) ? $config['ppps']['ppp'] : [];
-    } else {
+    if (is_array($ifacecfg)) {
         $ifcfg = $ifacecfg['ifcfg'];
         $ppps = $ifacecfg['ppps'];
-        /* When $ifacecfg is passed, it should contain the original interfaces */
+        /* when an $ifacecfg array is passed it contains the original interfaces */
         $realif = $ifacecfg['ifcfg']['realif'];
         $realifv6 = $ifacecfg['ifcfg']['realifv6'];
+    } else {
+        $ifcfg = $config['interfaces'][$interface];
+        $ppps = isset($config['ppps']['ppp']) ? $config['ppps']['ppp'] : [];
+        $realif = get_real_interface($interface);
+        $realifv6 = get_real_interface($interface, 'inet6');
     }
 
-    $ifcfg['ipaddr'] = empty($ifcfg['ipaddr']) ? null : $ifcfg['ipaddr'];
-    $ifcfg['ipaddrv6'] = empty($ifcfg['ipaddrv6']) ? null : $ifcfg['ipaddrv6'];
-
-    if (isset($config['virtualip']['vip'])) {
+    if (isset($config['virtualip']['vip']) && $ifacecfg !== false) {
         foreach ($config['virtualip']['vip'] as $vip) {
-            if ($vip['interface'] == $interface && $vip['mode'] != 'carp') {
-                /**
-                 * only disable non carp aliases, net.inet.carp.ifdown_demotion_factor should do its work
-                 * when a carp interface goes down
-                 */
-                interface_vip_bring_down($vip);
-            }
+            interface_vip_bring_down($vip);
         }
     }
 
@@ -818,7 +809,7 @@ function interface_bring_down($interface = 'wan', $ifacecfg = false)
         plugins_configure('dhcp', false, ['inet6', $track6]);
     }
 
-    switch ($ifcfg['ipaddrv6']) {
+    switch ($ifcfg['ipaddrv6'] ?? 'none') {
         case 'slaac':
         case 'dhcp6':
             interface_dhcpv6_prepare($interface, $ifcfg, true);
@@ -832,7 +823,7 @@ function interface_bring_down($interface = 'wan', $ifacecfg = false)
     }
 
     /* may be required or not, but kept here for symmetry with IPv4 */
-    if (!empty($ifcfg['ipaddrv6'])) {
+    if ($ifcfg['ipaddrv6'] != 'none' && ($ifacecfg !== false || !is_ipaddrv6($ifcfg['ipaddrv6']))) {
         /* edge case: bring down a primary GUA, but not a link-local */
         list ($ip6) = _interfaces_primary_address6($interface, null, false, false);
         if (!empty($ip6)) {
@@ -840,7 +831,7 @@ function interface_bring_down($interface = 'wan', $ifacecfg = false)
         }
     }
 
-    switch ($ifcfg['ipaddr']) {
+    switch ($ifcfg['ipaddr'] ?? 'none') {
         case 'ppp':
         case 'pppoe':
         case 'pptp':
@@ -866,7 +857,7 @@ function interface_bring_down($interface = 'wan', $ifacecfg = false)
     }
 
     /* required for static and dhcp (dhclient limitation) */
-    if (!empty($ifcfg['ipaddr'])) {
+    if ($ifcfg['ipaddr'] != 'none' && ($ifacecfg !== false || !is_ipaddr($ifcfg['ipaddr']))) {
         list ($ip4) = interfaces_primary_address($interface);
         if (!empty($ip4)) {
             mwexecf('/sbin/ifconfig %s delete %s', [$realif, $ip4]);
